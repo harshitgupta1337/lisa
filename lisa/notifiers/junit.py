@@ -8,6 +8,7 @@ from typing import IO, Any, Dict, List, Optional, Type, cast
 
 from dataclasses_json import dataclass_json
 
+from .subtest_aware_notifier import SubtestAwareNotifier
 from lisa import schema
 from lisa.messages import (
     MessageBase,
@@ -28,14 +29,14 @@ class JUnitSchema(schema.Notifier):
     path: str = "lisa.junit.xml"
 
 
-class _TestSuiteInfo:
+class _TestSuiteXmlInfo:
     def __init__(self) -> None:
         self.xml: ET.Element
         self.test_count: int = 0
         self.failed_count: int = 0
 
-
-class _TestCaseInfo:
+# TODO Does this class actually contain any XML info?
+class _TestCaseXmlInfo:
     def __init__(self) -> None:
         self.suite_full_name: str = ""
         self.name: str = ""
@@ -46,7 +47,7 @@ class _TestCaseInfo:
 
 # Outputs tests results in JUnit format.
 # See, https://llg.cubic.org/docs/junit/
-class JUnit(Notifier):
+class JUnit(SubtestAwareNotifier):
     @classmethod
     def type_name(cls) -> str:
         return "junit"
@@ -61,8 +62,8 @@ class JUnit(Notifier):
         self._report_path: Path
         self._report_file: IO[Any]
         self._testsuites: ET.Element
-        self._testsuites_info: Dict[str, _TestSuiteInfo]
-        self._testcases_info: Dict[str, _TestCaseInfo]
+        self._testsuites_xml_info: Dict[str, _TestSuiteXmlInfo]
+        self._testcases_xml_info: Dict[str, _TestCaseXmlInfo]
         self._xml_tree: ET.ElementTree
 
     # Test runner is initializing.
@@ -77,8 +78,11 @@ class JUnit(Notifier):
         self._testsuites = ET.Element("testsuites")
         self._xml_tree = ET.ElementTree(self._testsuites)
 
-        self._testsuites_info = {}
-        self._testcases_info = {}
+        self._testsuites_xml_info = {}
+        self._testcases_xml_info = {}
+
+        # TODO Find another way to initialize the data structures
+        self._initialize_runtime_info()
 
     # Test runner is closing.
     def finalize(self) -> None:
@@ -96,53 +100,11 @@ class JUnit(Notifier):
         self._xml_tree.write(self._report_file, xml_declaration=True, encoding="utf-8")
         self._report_file.flush()
 
-    # The types of messages that this class supports.
-    def _subscribed_message_type(self) -> List[Type[MessageBase]]:
-        return [TestResultMessage, TestRunMessage, SubTestMessage]
-
-    # Handle a message.
-    def _received_message(self, message: MessageBase) -> None:
-        if isinstance(message, TestRunMessage):
-            self._received_test_run(message)
-
-        elif isinstance(message, TestResultMessage):
-            self._received_test_result(message)
-
-        elif isinstance(message, SubTestMessage):
-            self._received_sub_test(message)
-
-    # Handle a test run message.
-    def _received_test_run(self, message: TestRunMessage) -> None:
-        if message.status == TestRunStatus.INITIALIZING:
-            self._test_run_started(message)
-
-        elif (
-            message.status == TestRunStatus.FAILED
-            or message.status == TestRunStatus.SUCCESS
-        ):
-            self._test_run_completed(message)
-
-    # Handle a test case message.
-    def _received_test_result(self, message: TestResultMessage) -> None:
-        if message.status in [TestStatus.RUNNING, TestStatus.SKIPPED]:
-            self._test_case_running(message)
-
-        if message.is_completed:
-            self._test_case_completed(message)
-
-    # Handle a sub test case message.
-    def _received_sub_test(self, message: SubTestMessage) -> None:
-        if message.status == TestStatus.RUNNING:
-            self._sub_test_case_running(message)
-
-        elif message.is_completed:
-            self._sub_test_case_completed(message)
-
     def _set_test_suite_info(self, message: TestResultMessage) -> None:
         # Check if the test suite for this test case has been seen yet.
-        if message.suite_full_name not in self._testsuites_info:
+        if message.suite_full_name not in self._testsuites_xml_info:
             # Add test suite.
-            testsuite_info = _TestSuiteInfo()
+            testsuite_info = _TestSuiteXmlInfo()
 
             testsuite_info.xml = ET.SubElement(self._testsuites, "testsuite")
             testsuite_info.xml.attrib["name"] = message.suite_full_name
@@ -151,28 +113,28 @@ class JUnit(Notifier):
             timestamp = message.time.replace(tzinfo=None).isoformat(timespec="seconds")
             testsuite_info.xml.attrib["timestamp"] = timestamp
 
-            self._testsuites_info[message.suite_full_name] = testsuite_info
+            self._testsuites_xml_info[message.suite_full_name] = testsuite_info
 
-            # Write out current results to file.
-            self._write_results()
-
+    # TODO Check if this function is needed
     def _set_test_case_info(self, message: TestResultMessage) -> None:
-        testcase_info = _TestCaseInfo()
+        testcase_info = _TestCaseXmlInfo()
         testcase_info.suite_full_name = message.suite_full_name
         testcase_info.name = message.name
         testcase_info.last_seen_timestamp = message.elapsed
-        self._testcases_info[message.id_] = testcase_info
+        self._testcases_xml_info[message.id_] = testcase_info
 
+    # TODO Move these functions to parent class?
     # Test run started message.
     def _test_run_started(self, message: TestRunMessage) -> None:
         self._testsuites.attrib["name"] = message.runbook_name
 
+    # TODO Move these functions to parent class?
     # Test run completed message.
     def _test_run_completed(self, message: TestRunMessage) -> None:
         total_tests = 0
         total_failures = 0
 
-        for testsuite_info in self._testsuites_info.values():
+        for testsuite_info in self._testsuites_xml_info.values():
             testsuite_info.xml.attrib["tests"] = str(testsuite_info.test_count)
             testsuite_info.xml.attrib["failures"] = str(testsuite_info.failed_count)
             testsuite_info.xml.attrib["errors"] = "0"
@@ -185,96 +147,6 @@ class JUnit(Notifier):
         self._testsuites.attrib["failures"] = str(total_failures)
         self._testsuites.attrib["errors"] = "0"
 
-    # Test case started message.
-    def _test_case_running(self, message: TestResultMessage) -> None:
-        self._set_test_suite_info(message)
-
-        # Initialize test-case info.
-        self._set_test_case_info(message)
-
-    # Test case completed message.
-    def _test_case_completed(self, message: TestResultMessage) -> None:
-        self._set_test_suite_info(message)
-
-        # check if the message id is in the testcases_info dictionary
-        # if not, then it is a test case  was attached to a failed environment
-        # and we should add it to the results
-        if message.id_ not in self._testcases_info.keys():
-            self._set_test_case_info(message)
-
-        testcase_info = self._testcases_info[message.id_]
-
-        # Check if there is an already active sub-test case that wasn't closed out.
-        if testcase_info.active_subtest_name is not None:
-            # Close out the sub-test case.
-            # If the test case encountered any errors, assume they are associated with
-            # the active sub-test case.
-            completed_message = SubTestMessage()
-            completed_message.id_ = message.id_
-            completed_message.name = testcase_info.active_subtest_name
-            completed_message.status = message.status
-            completed_message.message = message.message
-            completed_message.stacktrace = message.stacktrace
-            completed_message.elapsed = message.elapsed
-
-            self._sub_test_case_completed(completed_message)
-
-        # Calculate total time spent in test case that was not spent in a sub-test case.
-        elapsed = message.elapsed - testcase_info.subtest_total_elapsed
-
-        # Add test case result.
-        self._add_test_case_result(
-            message, message.suite_full_name, message.suite_full_name, elapsed
-        )
-
-    # Sub test case started message.
-    def _sub_test_case_running(self, message: SubTestMessage) -> None:
-        testcase_info = self._testcases_info[message.id_]
-
-        # Check if there is an already active sub-test case that wasn't closed out.
-        if testcase_info.active_subtest_name is not None:
-            # Assume the previous sub-test case succeeded.
-            completed_message = SubTestMessage()
-            completed_message.id_ = message.id_
-            completed_message.name = testcase_info.active_subtest_name
-            completed_message.status = TestStatus.PASSED
-            completed_message.elapsed = message.elapsed
-
-            self._sub_test_case_completed(completed_message)
-
-        # Mark the new sub-test case as running.
-        testcase_info.active_subtest_name = message.name
-        testcase_info.last_seen_timestamp = message.elapsed
-
-    # Sub test case completed message.
-    def _sub_test_case_completed(self, message: SubTestMessage) -> None:
-        testcase_info = self._testcases_info[message.id_]
-
-        # Check if there is an already active sub-test.
-        if testcase_info.active_subtest_name is not None:
-            if testcase_info.active_subtest_name != message.name:
-                # The active sub-test is not the same as the one that just completed.
-                # Report the problem.
-                raise LisaException(
-                    "Completed sub-test is not the same as the active sub-test."
-                )
-
-            testcase_info.active_subtest_name = None
-
-        # Calculate the amount of time spent in the sub-test case.
-        elapsed = message.elapsed - testcase_info.last_seen_timestamp
-        testcase_info.subtest_total_elapsed += elapsed
-
-        # Add sub-test case result.
-        self._add_test_case_result(
-            message,
-            testcase_info.suite_full_name,
-            f"{testcase_info.suite_full_name}.{testcase_info.name}",
-            elapsed,
-        )
-
-        testcase_info.last_seen_timestamp = message.elapsed
-
     # Add test case result to XML.
     def _add_test_case_result(
         self,
@@ -283,7 +155,7 @@ class JUnit(Notifier):
         class_name: str,
         elapsed: float,
     ) -> None:
-        testsuite_info = self._testsuites_info.get(suite_full_name)
+        testsuite_info = self._testsuites_xml_info.get(suite_full_name)
         if not testsuite_info:
             raise LisaException("Test suite not started.")
 

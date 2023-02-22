@@ -3,6 +3,7 @@ from typing import Any, Dict, Type
 
 from lisa import schema
 from lisa.messages import SubTestMessage, TestResultMessage, TestResultMessageBase, TestRunMessage, TestStatus
+from lisa.util.logger import get_logger
 from .subtest_aware_notifier import SubtestAwareNotifier
 
 class SubTestResultCollector(SubtestAwareNotifier):
@@ -16,6 +17,7 @@ class SubTestResultCollector(SubtestAwareNotifier):
 
     def __init__(self, runbook: schema.TypedSchema) -> None:
         super().__init__(runbook=runbook)
+        self._log = get_logger("notifier", self.__class__.__name__)
         self.subtest_passed: Dict[str, bool]
 
     def _initialize(self, *args: Any, **kwargs: Any) -> None:
@@ -25,8 +27,7 @@ class SubTestResultCollector(SubtestAwareNotifier):
     def finalize(self) -> None:
         for subtest in self.subtest_passed:
             result = self.subtest_passed[subtest]
-            # TODO get_logger from lisa.util.logger. See how its used in notifier.py
-            print (f"{subtest}\t{result}")
+            self._log.info (f"{subtest}\t{result}")
 
     def _test_run_started(self, message: TestRunMessage) -> None:
         pass

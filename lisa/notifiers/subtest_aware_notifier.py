@@ -191,6 +191,9 @@ class SubtestAwareNotifier(Notifier):
     def _test_run_completed(self, message: TestRunMessage) -> None:
         raise NotImplementedError
 
+    def _set_test_case_info(self, message: TestResultMessage) -> None:
+        raise NotImplementedError
+
     # Add test case result to XML.
     def _add_test_case_result(
         self,

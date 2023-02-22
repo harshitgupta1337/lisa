@@ -21,7 +21,6 @@ from lisa.util.perf_timer import Timer, create_timer
 from lisa.util.subclasses import Factory
 from lisa.variable import VariableEntry, get_case_variables, replace_variables
 
-
 def parse_testcase_filters(raw_filters: List[Any]) -> List[schema.BaseTestCaseFilter]:
     if raw_filters:
         filters: List[schema.BaseTestCaseFilter] = []
@@ -34,21 +33,6 @@ def parse_testcase_filters(raw_filters: List[Any]) -> List[schema.BaseTestCaseFi
         filters = [schema.TestCase(name="test", criteria=schema.Criteria(area="demo"))]
     return filters
 
-
-def print_subtest_results(
-    subtest_states: Dict[str, bool],
-    output_method: Callable[[str], Any],
-) -> None:
-    # Do not print the subtest result summary if no subtests are present in results
-    if len(subtest_states) == 0:
-        return
-    output_method("________________________________________")
-    output_method("subtest result summary")
-    for test in subtest_states:
-        if subtest_states[test]:
-            output_method(f"{test} PASSED")
-        else:
-            output_method(f"{test} FAILED")
 
 def print_results(
     test_results: List[TestResultMessage],
@@ -101,28 +85,6 @@ class RunnerResult(notifier.Notifier):
 
     def _initialize(self, *args: Any, **kwargs: Any) -> None:
         self.results: Dict[str, TestResultMessage] = {}
-
-
-class SubTestResultCollector(RunnerResult):
-    """
-    This is an internal notifier. It is used to collect results of subtests for runner.
-    """
-
-    def _received_message(self, message: messages.MessageBase) -> None:
-        assert isinstance(message, SubTestMessage), f"actual: {type(message)}"
-
-        assert_that(message.status).is_in(TestStatus.RUNNING, TestStatus.PASSED)
-
-        if message.status == TestStatus.RUNNING:
-            self.subtest_passed[message.name] = False
-        else:
-            self.subtest_passed[message.name] = True
-
-    def _subscribed_message_type(self) -> List[Type[messages.MessageBase]]:
-        return [SubTestMessage]
-
-    def _initialize(self, *args: Any, **kwargs: Any) -> None:
-        self.subtest_passed: Dict[str, bool] = {}
 
 
 class BaseRunner(BaseClassMixin, InitializableMixin):
@@ -237,7 +199,6 @@ class RootRunner(Action):
         await super().start()
 
         self._results_collector: Optional[RunnerResult] = None
-        self._subtest_result_collector: Optional[SubTestResultCollector] = None
         try:
             transformer.run(
                 self._runbook_builder, phase=constants.TRANSFORMER_PHASE_INIT
@@ -256,9 +217,6 @@ class RootRunner(Action):
 
             self._results_collector = RunnerResult(schema.Notifier())
             register_notifier(self._results_collector)
-
-            self._subtest_result_collector = SubTestResultCollector(schema.Notifier())
-            register_notifier(self._subtest_result_collector)
 
             self._start_loop()
         except Exception as identifier:
@@ -280,11 +238,6 @@ class RootRunner(Action):
                 )
             else:
                 self.exit_code = 0
-
-        # Printing the result of subtests
-        if self._subtest_result_collector:
-            subtest_states = self._subtest_result_collector.subtest_passed
-            print_subtest_results(subtest_states, self._log.info)
 
     async def stop(self) -> None:
         await super().stop()

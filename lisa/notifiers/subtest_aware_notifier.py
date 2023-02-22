@@ -133,15 +133,14 @@ class SubtestAwareNotifier(Notifier):
 
     # Test case started message.
     def _test_case_running(self, message: TestResultMessage) -> None:
-        # TODO Change name of this function to something like initialize
-        self._set_test_case_info(message)
+        self._init_test_case_info(message)
 
         # Initialize test-case info.
         self._set_test_case_runtime_info(message)
 
     # Test case completed message.
     def _test_case_completed(self, message: TestResultMessage) -> None:
-        self._set_test_case_info(message)
+        self._init_test_case_info(message)
 
         # check if the message id is in the testcases_info dictionary
         # if not, then it is a test case  was attached to a failed environment
@@ -185,16 +184,23 @@ class SubtestAwareNotifier(Notifier):
     def finalize(self) -> None:
         pass
 
+    # Alert the notifier about the start of a Test Run.
+    # Use this event to update metadata about the Test Run.
     def _test_run_started(self, message: TestRunMessage) -> None:
         raise NotImplementedError
 
+    # Alert the notifier about the end of a Test Run.
+    # Use this event to update metadata about the Test Run.
     def _test_run_completed(self, message: TestRunMessage) -> None:
         raise NotImplementedError
 
-    def _set_test_case_info(self, message: TestResultMessage) -> None:
+    # Initialize metadata about a Test Case.
+    # This function is called when Test Case starts and completes.
+    # Ensure that its implementation is idempotent.
+    def _init_test_case_info(self, message: TestResultMessage) -> None:
         raise NotImplementedError
 
-    # Add test case result to XML.
+    # Add the result of a Test Case.
     def _add_test_case_result(
         self,
         message: TestResultMessageBase,
@@ -204,12 +210,12 @@ class SubtestAwareNotifier(Notifier):
     ) -> None:
         raise NotImplementedError    
 
-    # Add subtest case result to XML.
+    # Add the result of a SubTest Case.
     def _add_subtest_case_result(
         self,
         message: SubTestMessage,
         suite_full_name: str,
-        class_name: str,
+        testcase_full_name: str,
         elapsed: float,
     ) -> None:
         raise NotImplementedError

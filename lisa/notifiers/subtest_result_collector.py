@@ -34,7 +34,7 @@ class SubTestResultCollector(SubtestAwareNotifier):
     def _test_run_completed(self, message: TestRunMessage) -> None:
         pass
 
-    def _set_test_case_info(self, message: TestResultMessage) -> None:
+    def _init_test_case_info(self, message: TestResultMessage) -> None:
         pass
 
     # Add test case result to XML.
@@ -63,6 +63,3 @@ class SubTestResultCollector(SubtestAwareNotifier):
             self.subtest_passed[message.name] = False
         else:
             self.subtest_passed[message.name] = True
-
-
-

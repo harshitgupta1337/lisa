@@ -107,8 +107,7 @@ class JUnit(SubtestAwareNotifier):
 
         return self._testsuites_xml_info[message.suite_full_name]
 
-    # TODO Declare this as NotImplemented in parent class
-    def _set_test_case_info(self, message: TestResultMessage) -> None:
+    def _init_test_case_info(self, message: TestResultMessage) -> None:
         case_full_name = f"{message.suite_full_name}.{message.name}"
         # Check if the test case has been seen yet.
         if case_full_name not in self._testcases_xml_info:
@@ -123,12 +122,10 @@ class JUnit(SubtestAwareNotifier):
 
             self._testcases_xml_info[case_full_name] = testcase_info
 
-    # TODO Move these functions to parent class?
     # Test run started message.
     def _test_run_started(self, message: TestRunMessage) -> None:
         self._testsuites.attrib["name"] = message.runbook_name
 
-    # TODO Move these functions to parent class?
     # Test run completed message.
     def _test_run_completed(self, message: TestRunMessage) -> None:
         total_tests = 0

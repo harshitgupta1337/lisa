@@ -134,7 +134,7 @@ class SubtestAwareNotifier(Notifier):
     # Test case started message.
     def _test_case_running(self, message: TestResultMessage) -> None:
         # TODO Change name of this function to something like initialize
-        self.set_test_case_info(message)
+        self._set_test_case_info(message)
 
         # Initialize test-case info.
         self._set_test_case_runtime_info(message)

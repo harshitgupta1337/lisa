@@ -22,12 +22,6 @@ from lisa.util import LisaException, constants
 
 # TODO IF these Info classes are not used by any other file, then add leading underscore to their names
 # TODO Check which fields are not required
-class TestSuiteRuntimeInfo:
-    def __init__(self) -> None:
-        self.test_count: int = 0
-        self.failed_count: int = 0
-
-# TODO Check which fields are not required
 class TestCaseRuntimeInfo:
     def __init__(self) -> None:
         self.suite_full_name: str = ""
@@ -39,19 +33,13 @@ class TestCaseRuntimeInfo:
 class SubtestAwareNotifier(Notifier):
     @classmethod
     def type_name(cls) -> str:
-        return "subtestawarenotifier"
+        # no type_name, not able to import from yaml book.
+        return ""
 
     def __init__(self, runbook: schema.TypedSchema) -> None:
         super().__init__(runbook=runbook)
 
-        self._testsuites_info: Dict[str, TestSuiteRuntimeInfo]
-        self._testcases_info: Dict[str, TestCaseRuntimeInfo]
-
-    # TODO This function needs to be called some other way. Can't make the child class developer remember to call this function
-    def _initialize_runtime_info(self, *args: Any, **kwargs: Any) -> None:
-        print ("Initializing SubtestAwareNotifier")
-        self._testsuites_info = {}
-        self._testcases_info = {}
+        self._testcases_info: Dict[str, TestCaseRuntimeInfo] = {}
 
     # The types of messages that this class supports.
     def _subscribed_message_type(self) -> List[Type[MessageBase]]:
@@ -195,3 +183,19 @@ class SubtestAwareNotifier(Notifier):
     # Test runner is closing.
     def finalize(self) -> None:
         pass
+
+    def _test_run_started(self, message: TestRunMessage) -> None:
+        raise NotImplementedError
+
+    def _test_run_completed(self, message: TestRunMessage) -> None:
+        raise NotImplementedError
+
+    # Add test case result to XML.
+    def _add_test_case_result(
+        self,
+        message: TestResultMessageBase,
+        suite_full_name: str,
+        class_name: str,
+        elapsed: float,
+    ) -> None:
+        raise NotImplementedError

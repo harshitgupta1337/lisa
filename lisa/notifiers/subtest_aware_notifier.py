@@ -204,7 +204,7 @@ class SubtestAwareNotifier(Notifier):
     # Add subtest case result to XML.
     def _add_subtest_case_result(
         self,
-        message: TestResultMessageBase,
+        message: SubTestMessage,
         suite_full_name: str,
         class_name: str,
         elapsed: float,

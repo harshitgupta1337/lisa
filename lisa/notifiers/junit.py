@@ -168,26 +168,14 @@ class JUnit(SubtestAwareNotifier):
         testcase.attrib["classname"] = class_name
         testcase.attrib["time"] = self._get_elapsed_str(elapsed)
 
-        if message.status == TestStatus.FAILED:
-            failure = ET.SubElement(testcase, "failure")
-            failure.attrib["message"] = message.message
-            failure.text = message.stacktrace
-
-            testsuite_info.failed_count += 1
-
-        elif (
-            message.status == TestStatus.SKIPPED
-            or message.status == TestStatus.ATTEMPTED
-        ):
-            skipped = ET.SubElement(testcase, "skipped")
-            skipped.attrib["message"] = message.message
+        self.add_failed_or_skipped(message, testcase)
 
         testsuite_info.test_count += 1
 
     # Add test case result to XML.
     def _add_subtest_case_result(
         self,
-        message: TestResultMessageBase,
+        message: SubTestMessage,
         suite_full_name: str,
         testcase_full_name: str,
         elapsed: float,
@@ -202,8 +190,11 @@ class JUnit(SubtestAwareNotifier):
         subtestcase.attrib["testcase"] = testcase_full_name
         subtestcase.attrib["time"] = self._get_elapsed_str(elapsed)
 
+        self.add_failed_or_skipped(message, subtestcase)
+
+    def add_failed_or_skipped(self, message: TestResultMessageBase, xml: ET.SubElement):
         if message.status == TestStatus.FAILED:
-            failure = ET.SubElement(subtestcase, "failure")
+            failure = ET.SubElement(xml, "failure")
             failure.attrib["message"] = message.message
             failure.text = message.stacktrace
 
@@ -211,7 +202,7 @@ class JUnit(SubtestAwareNotifier):
             message.status == TestStatus.SKIPPED
             or message.status == TestStatus.ATTEMPTED
         ):
-            skipped = ET.SubElement(subtestcase, "skipped")
+            skipped = ET.SubElement(xml, "skipped")
             skipped.attrib["message"] = message.message
 
     def _get_elapsed_str(self, elapsed: float) -> str:

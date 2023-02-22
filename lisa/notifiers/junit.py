@@ -35,16 +35,6 @@ class _TestSuiteXmlInfo:
         self.test_count: int = 0
         self.failed_count: int = 0
 
-# TODO Does this class actually contain any XML info?
-class _TestCaseXmlInfo:
-    def __init__(self) -> None:
-        self.suite_full_name: str = ""
-        self.name: str = ""
-        self.active_subtest_name: Optional[str] = None
-        self.last_seen_timestamp: float = 0.0
-        self.subtest_total_elapsed: float = 0.0
-
-
 # Outputs tests results in JUnit format.
 # See, https://llg.cubic.org/docs/junit/
 class JUnit(SubtestAwareNotifier):
@@ -63,7 +53,6 @@ class JUnit(SubtestAwareNotifier):
         self._report_file: IO[Any]
         self._testsuites: ET.Element
         self._testsuites_xml_info: Dict[str, _TestSuiteXmlInfo]
-        self._testcases_xml_info: Dict[str, _TestCaseXmlInfo]
         self._xml_tree: ET.ElementTree
 
     # Test runner is initializing.
@@ -79,10 +68,6 @@ class JUnit(SubtestAwareNotifier):
         self._xml_tree = ET.ElementTree(self._testsuites)
 
         self._testsuites_xml_info = {}
-        self._testcases_xml_info = {}
-
-        # TODO Find another way to initialize the data structures
-        self._initialize_runtime_info()
 
     # Test runner is closing.
     def finalize(self) -> None:
@@ -114,14 +99,6 @@ class JUnit(SubtestAwareNotifier):
             testsuite_info.xml.attrib["timestamp"] = timestamp
 
             self._testsuites_xml_info[message.suite_full_name] = testsuite_info
-
-    # TODO Check if this function is needed
-    def _set_test_case_info(self, message: TestResultMessage) -> None:
-        testcase_info = _TestCaseXmlInfo()
-        testcase_info.suite_full_name = message.suite_full_name
-        testcase_info.name = message.name
-        testcase_info.last_seen_timestamp = message.elapsed
-        self._testcases_xml_info[message.id_] = testcase_info
 
     # TODO Move these functions to parent class?
     # Test run started message.

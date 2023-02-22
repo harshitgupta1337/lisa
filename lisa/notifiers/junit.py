@@ -160,10 +160,11 @@ class JUnit(SubtestAwareNotifier):
             raise LisaException("Test suite not started.")
 
         case_full_name = f"{message.suite_full_name}.{message.name}"
-        self._set_test_case_info(message)
         testcase_info = self._testcases_xml_info.get(case_full_name)
-        testcase = testcase_info.xml
+        if not testcase_info:
+            raise LisaException(f"Test case {case_full_name} not started.")
 
+        testcase = testcase_info.xml
         testcase.attrib["name"] = message.name
         testcase.attrib["classname"] = class_name
         testcase.attrib["time"] = self._get_elapsed_str(elapsed)
@@ -180,7 +181,6 @@ class JUnit(SubtestAwareNotifier):
         testcase_full_name: str,
         elapsed: float,
     ) -> None:
-        
         testcase_info = self._testcases_xml_info.get(testcase_full_name)
         if not testcase_info:
             raise LisaException(f"Test case {testcase_full_name} not started.")

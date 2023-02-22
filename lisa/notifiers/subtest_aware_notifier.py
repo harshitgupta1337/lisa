@@ -122,7 +122,7 @@ class SubtestAwareNotifier(Notifier):
         testcase_info.subtest_total_elapsed += elapsed
 
         # Add sub-test case result.
-        self._add_test_case_result(
+        self._add_subtest_case_result(
             message,
             testcase_info.suite_full_name,
             f"{testcase_info.suite_full_name}.{testcase_info.name}",
@@ -133,14 +133,15 @@ class SubtestAwareNotifier(Notifier):
 
     # Test case started message.
     def _test_case_running(self, message: TestResultMessage) -> None:
-        self._set_test_suite_info(message)
+        # TODO Change name of this function to something like initialize
+        self.set_test_case_info(message)
 
         # Initialize test-case info.
         self._set_test_case_runtime_info(message)
 
     # Test case completed message.
     def _test_case_completed(self, message: TestResultMessage) -> None:
-        self._set_test_suite_info(message)
+        self._set_test_case_info(message)
 
         # check if the message id is in the testcases_info dictionary
         # if not, then it is a test case  was attached to a failed environment
@@ -192,6 +193,16 @@ class SubtestAwareNotifier(Notifier):
 
     # Add test case result to XML.
     def _add_test_case_result(
+        self,
+        message: TestResultMessageBase,
+        suite_full_name: str,
+        class_name: str,
+        elapsed: float,
+    ) -> None:
+        raise NotImplementedError    
+
+    # Add subtest case result to XML.
+    def _add_subtest_case_result(
         self,
         message: TestResultMessageBase,
         suite_full_name: str,

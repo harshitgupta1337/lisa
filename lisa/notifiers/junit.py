@@ -28,6 +28,9 @@ from lisa.util import LisaException, constants
 class JUnitSchema(schema.Notifier):
     path: str = "lisa.junit.xml"
 
+class _TestCaseXmlInfo:
+    def __init__(self) -> None:
+        self.xml: ET.Element
 
 class _TestSuiteXmlInfo:
     def __init__(self) -> None:
@@ -53,6 +56,7 @@ class JUnit(SubtestAwareNotifier):
         self._report_file: IO[Any]
         self._testsuites: ET.Element
         self._testsuites_xml_info: Dict[str, _TestSuiteXmlInfo]
+        self._testcases_xml_info: Dict[str, _TestCaseXmlInfo]
         self._xml_tree: ET.ElementTree
 
     # Test runner is initializing.
@@ -68,6 +72,7 @@ class JUnit(SubtestAwareNotifier):
         self._xml_tree = ET.ElementTree(self._testsuites)
 
         self._testsuites_xml_info = {}
+        self._testcases_xml_info = {}
 
     # Test runner is closing.
     def finalize(self) -> None:
@@ -85,7 +90,7 @@ class JUnit(SubtestAwareNotifier):
         self._xml_tree.write(self._report_file, xml_declaration=True, encoding="utf-8")
         self._report_file.flush()
 
-    def _set_test_suite_info(self, message: TestResultMessage) -> None:
+    def _create_or_get_testsuite_info(self, message: TestResultMessage) -> None:
         # Check if the test suite for this test case has been seen yet.
         if message.suite_full_name not in self._testsuites_xml_info:
             # Add test suite.
@@ -99,6 +104,24 @@ class JUnit(SubtestAwareNotifier):
             testsuite_info.xml.attrib["timestamp"] = timestamp
 
             self._testsuites_xml_info[message.suite_full_name] = testsuite_info
+
+        return self._testsuites_xml_info[message.suite_full_name]
+
+    # TODO Declare this as NotImplemented in parent class
+    def _set_test_case_info(self, message: TestResultMessage) -> None:
+        case_full_name = f"{message.suite_full_name}.{message.name}"
+        # Check if the test case has been seen yet.
+        if case_full_name not in self._testcases_xml_info:
+            # Add test suite.
+            testcase_info = _TestCaseXmlInfo()
+
+            # Get the testsuite element
+            testsuite_info = self._create_or_get_testsuite_info(message)
+
+            testcase_info.xml = ET.SubElement(testsuite_info.xml, "testcase")
+            testcase_info.xml.attrib["name"] = message.name
+
+            self._testcases_xml_info[case_full_name] = testcase_info
 
     # TODO Move these functions to parent class?
     # Test run started message.
@@ -127,7 +150,7 @@ class JUnit(SubtestAwareNotifier):
     # Add test case result to XML.
     def _add_test_case_result(
         self,
-        message: TestResultMessageBase,
+        message: TestResultMessage,
         suite_full_name: str,
         class_name: str,
         elapsed: float,
@@ -136,7 +159,11 @@ class JUnit(SubtestAwareNotifier):
         if not testsuite_info:
             raise LisaException("Test suite not started.")
 
-        testcase = ET.SubElement(testsuite_info.xml, "testcase")
+        case_full_name = f"{message.suite_full_name}.{message.name}"
+        self._set_test_case_info(message)
+        testcase_info = self._testcases_xml_info.get(case_full_name)
+        testcase = testcase_info.xml
+
         testcase.attrib["name"] = message.name
         testcase.attrib["classname"] = class_name
         testcase.attrib["time"] = self._get_elapsed_str(elapsed)
@@ -157,8 +184,35 @@ class JUnit(SubtestAwareNotifier):
 
         testsuite_info.test_count += 1
 
-        # Write out current results to file.
-        self._write_results()
+    # Add test case result to XML.
+    def _add_subtest_case_result(
+        self,
+        message: TestResultMessageBase,
+        suite_full_name: str,
+        testcase_full_name: str,
+        elapsed: float,
+    ) -> None:
+        
+        testcase_info = self._testcases_xml_info.get(testcase_full_name)
+        if not testcase_info:
+            raise LisaException(f"Test case {testcase_full_name} not started.")
+
+        subtestcase = ET.SubElement(testcase_info.xml, "subtestcase")
+        subtestcase.attrib["name"] = message.name
+        subtestcase.attrib["testcase"] = testcase_full_name
+        subtestcase.attrib["time"] = self._get_elapsed_str(elapsed)
+
+        if message.status == TestStatus.FAILED:
+            failure = ET.SubElement(subtestcase, "failure")
+            failure.attrib["message"] = message.message
+            failure.text = message.stacktrace
+
+        elif (
+            message.status == TestStatus.SKIPPED
+            or message.status == TestStatus.ATTEMPTED
+        ):
+            skipped = ET.SubElement(subtestcase, "skipped")
+            skipped.attrib["message"] = message.message
 
     def _get_elapsed_str(self, elapsed: float) -> str:
         return f"{elapsed:.3f}"

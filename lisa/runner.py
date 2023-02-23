@@ -3,6 +3,7 @@
 
 import copy
 import time
+from assertpy import assert_that
 from logging import FileHandler
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Type
@@ -19,7 +20,6 @@ from lisa.util.parallel import Task, TaskManager, cancel, set_global_task_manage
 from lisa.util.perf_timer import Timer, create_timer
 from lisa.util.subclasses import Factory
 from lisa.variable import VariableEntry, get_case_variables, replace_variables
-
 
 def parse_testcase_filters(raw_filters: List[Any]) -> List[schema.BaseTestCaseFilter]:
     if raw_filters:

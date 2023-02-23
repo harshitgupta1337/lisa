@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Type
 from lisa import messages, notifier, schema, transformer
 from lisa.action import Action
 from lisa.combinator import Combinator
-from lisa.messages import SubTestMessage, TestResultMessage, TestStatus
+from lisa.messages import TestResultMessage, TestStatus
 from lisa.notifier import register_notifier
 from lisa.parameter_parser.runbook import RunbookBuilder
 from lisa.util import BaseClassMixin, InitializableMixin, LisaException, constants

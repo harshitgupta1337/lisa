@@ -28,10 +28,6 @@ from lisa.util import LisaException, constants
 class JUnitSchema(schema.Notifier):
     path: str = "lisa.junit.xml"
 
-class _TestCaseXmlInfo:
-    def __init__(self) -> None:
-        self.xml: ET.Element
-
 class _TestSuiteXmlInfo:
     def __init__(self) -> None:
         self.xml: ET.Element
@@ -56,7 +52,6 @@ class JUnit(SubtestAwareNotifier):
         self._report_file: IO[Any]
         self._testsuites: ET.Element
         self._testsuites_xml_info: Dict[str, _TestSuiteXmlInfo]
-        self._testcases_xml_info: Dict[str, _TestCaseXmlInfo]
         self._xml_tree: ET.ElementTree
 
     # Test runner is initializing.
@@ -72,7 +67,6 @@ class JUnit(SubtestAwareNotifier):
         self._xml_tree = ET.ElementTree(self._testsuites)
 
         self._testsuites_xml_info = {}
-        self._testcases_xml_info = {}
 
     # Test runner is closing.
     def finalize(self) -> None:
@@ -108,19 +102,7 @@ class JUnit(SubtestAwareNotifier):
         return self._testsuites_xml_info[message.suite_full_name]
 
     def _init_test_case_info(self, message: TestResultMessage) -> None:
-        case_full_name = f"{message.suite_full_name}.{message.name}"
-        # Check if the test case has been seen yet.
-        if case_full_name not in self._testcases_xml_info:
-            # Add test suite.
-            testcase_info = _TestCaseXmlInfo()
-
-            # Get the testsuite element
-            testsuite_info = self._create_or_get_testsuite_info(message)
-
-            testcase_info.xml = ET.SubElement(testsuite_info.xml, "testcase")
-            testcase_info.xml.attrib["name"] = message.name
-
-            self._testcases_xml_info[case_full_name] = testcase_info
+        self._create_or_get_testsuite_info(message)
 
     # Test run started message.
     def _test_run_started(self, message: TestRunMessage) -> None:
@@ -152,23 +134,7 @@ class JUnit(SubtestAwareNotifier):
         class_name: str,
         elapsed: float,
     ) -> None:
-        testsuite_info = self._testsuites_xml_info.get(suite_full_name)
-        if not testsuite_info:
-            raise LisaException("Test suite not started.")
-
-        case_full_name = f"{message.suite_full_name}.{message.name}"
-        testcase_info = self._testcases_xml_info.get(case_full_name)
-        if not testcase_info:
-            raise LisaException(f"Test case {case_full_name} not started.")
-
-        testcase = testcase_info.xml
-        testcase.attrib["name"] = message.name
-        testcase.attrib["classname"] = class_name
-        testcase.attrib["time"] = self._get_elapsed_str(elapsed)
-
-        self.add_failed_or_skipped(message, testcase)
-
-        testsuite_info.test_count += 1
+        self._add_test_case_xml(message, suite_full_name, class_name, elapsed)
 
     # Add test case result to XML.
     def _add_subtest_case_result(
@@ -178,22 +144,34 @@ class JUnit(SubtestAwareNotifier):
         testcase_full_name: str,
         elapsed: float,
     ) -> None:
-        testcase_info = self._testcases_xml_info.get(testcase_full_name)
-        if not testcase_info:
-            raise LisaException(f"Test case {testcase_full_name} not started.")
+        self._add_test_case_xml(message, suite_full_name, testcase_full_name, elapsed)
 
-        subtestcase = ET.SubElement(testcase_info.xml, "subtestcase")
-        subtestcase.attrib["name"] = message.name
-        subtestcase.attrib["testcase"] = testcase_full_name
-        subtestcase.attrib["time"] = self._get_elapsed_str(elapsed)
+    def _add_test_case_xml(self,
+        message: TestResultMessageBase,
+        suite_full_name: str,
+        class_name: str,
+        elapsed: float,
+        ) -> None:
+        testsuite_info = self._testsuites_xml_info.get(suite_full_name)
+        if not testsuite_info:
+            raise LisaException("Test suite not started.")
 
-        self.add_failed_or_skipped(message, subtestcase)
+        testcase = ET.SubElement(testsuite_info.xml, "testcase")
+        testcase.attrib["name"] = message.name
+        testcase.attrib["classname"] = class_name
+        testcase.attrib["time"] = self._get_elapsed_str(elapsed)
 
-    def add_failed_or_skipped(self, message: TestResultMessageBase, xml: ET.SubElement):
+        self.add_failed_or_skipped(message, testcase, testsuite_info)
+
+        testsuite_info.test_count += 1
+
+    def add_failed_or_skipped(self, message: TestResultMessageBase, xml: ET.SubElement, testsuite_info: _TestSuiteXmlInfo):
         if message.status == TestStatus.FAILED:
             failure = ET.SubElement(xml, "failure")
             failure.attrib["message"] = message.message
             failure.text = message.stacktrace
+
+            testsuite_info.failed_count += 1
 
         elif (
             message.status == TestStatus.SKIPPED
